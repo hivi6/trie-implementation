@@ -12,6 +12,12 @@ struct trie_t {
   struct node_t *root;
 };
 
+struct suggestions {
+  int count;
+  int capacity;
+  char **items;
+};
+
 struct node_t *node_init() {
   return calloc(1, sizeof(struct node_t));
 }
@@ -47,9 +53,24 @@ void trie_insert(struct trie_t *trie, const char *word) {
   current->is_end = 1;
 }
 
-void node_find_words(struct node_t *node, const char *prefix) {
+void node_find_words(struct node_t *node, const char *prefix, struct suggestions *s) {
   if (node->is_end) {
-    printf("%s\n", prefix);
+    int len = strlen(prefix);
+    char *res = malloc(len + 1);
+    strcpy(res, prefix);
+    res[len] = 0;
+    
+    if (s->count >= s->capacity) {
+      s->capacity += 8;
+      char **temp = malloc(s->capacity * sizeof(char *));
+      for (int i = 0; i < s->count; i++) {
+        temp[i] = s->items[i];
+      }
+      free(s->items);
+      s->items = temp;
+    }
+    s->items[s->count] = res;
+    s->count++;
   }
 
   for (int i = 0; i < 26; i++) {
@@ -58,13 +79,13 @@ void node_find_words(struct node_t *node, const char *prefix) {
       strcpy(new_prefix, prefix);
       new_prefix[strlen(prefix)] = i + 'a';
       new_prefix[strlen(prefix) + 1] = 0;
-      node_find_words(node->children[i], new_prefix);
+      node_find_words(node->children[i], new_prefix, s);
       free(new_prefix);
     }
   }
 }
 
-void trie_suggest(struct trie_t *trie, const char *prefix) {
+void trie_suggest(struct trie_t *trie, const char *prefix, struct suggestions *s) {
   struct node_t *node = trie->root;
   for (int i = 0; prefix[i]; i++) {
     int index = prefix[i] - 'a';
@@ -73,7 +94,7 @@ void trie_suggest(struct trie_t *trie, const char *prefix) {
     }
     node = node->children[index];
   }
-  node_find_words(node, prefix);
+  node_find_words(node, prefix, s);
 }
 
 void trie_from_file(struct trie_t *trie, const char *fname) {
@@ -101,11 +122,28 @@ void trie_from_file(struct trie_t *trie, const char *fname) {
 }
 
 int main() {
+  char buffer[256];
+  printf("Enter prefix: ");
+  scanf("%s", buffer);
+
   struct trie_t *trie = trie_init();
 
   trie_from_file(trie, "words.txt");
 
-  trie_suggest(trie, "a");
+  struct suggestions *s = calloc(1, sizeof(struct suggestions));
+  
+  trie_suggest(trie, buffer, s);
+
+  printf("Do you mean:\n");
+  for (int i = 0; i < s->count; i++) {
+    printf("%s\n", s->items[i]);
+  }
+
+  for (int i = 0; i < s->count; i++) {
+    free(s->items[i]);
+  }
+  free(s->items);
+  free(s);
 
   trie_delete(trie);
 
